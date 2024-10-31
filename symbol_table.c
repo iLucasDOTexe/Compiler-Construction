@@ -8,7 +8,7 @@ void initSymbolTable(SymbolTable *table) {
     table->symbols = malloc(table->capacity * sizeof(Symbol));
 }
 
-int addSymbol(SymbolTable *table, const char *name, const char *type, int initialized) {
+int addSymbol(SymbolTable *table, const char *name, const char *type, int initialized, char *regName) {
     //DEBUG
     if (name == NULL || type == NULL) {
         fprintf(stderr, "Error: Null pointer passed to addSymbol: name=%s, type=%s\n", name, type);
@@ -30,6 +30,7 @@ int addSymbol(SymbolTable *table, const char *name, const char *type, int initia
     table->symbols[table->count].name = strdup(name);
     table->symbols[table->count].type = strdup(type);
     table->symbols[table->count].initialized = initialized;
+    table->symbols[table->count].regName = regName;
     ++table->count;
     return 0;
 }
@@ -94,5 +95,15 @@ void setSymbolInitialized(SymbolTable *table, const char *name) {
     int index = findSymbol(table, name);
     if (index != -1) {
         table->symbols[index].initialized = 1;
+    }
+}
+
+char* getSymbolRegister(SymbolTable *table, const char *name) {
+    int index = findSymbol(table, name);
+    if (index != -1) {
+        return table->symbols[index].regName;
+    } else {
+        fprintf(stderr, "Error: Varaible %s not declared.\n", name);
+        return NULL;
     }
 }

@@ -10,6 +10,7 @@ BISON = bison
 LEX_FILE = lex.l
 YACC_FILE = parser.y
 SYMBOL_TABLE_SRC = symbol_table.c
+ILOC_SRC = iloc.c
 
 # Output files
 LEX_OUTPUT = lex.yy.c
@@ -21,8 +22,8 @@ EXECUTABLE = FrontEnd
 all: $(EXECUTABLE)
 
 # Compile the compiler
-$(EXECUTABLE): $(YACC_OUTPUT) $(LEX_OUTPUT) $(SYMBOL_TABLE_SRC)
-	$(CC) $(CFLAGS) -o $(EXECUTABLE) $(YACC_OUTPUT) $(LEX_OUTPUT) $(SYMBOL_TABLE_SRC)
+$(EXECUTABLE): $(YACC_OUTPUT) $(LEX_OUTPUT) $(SYMBOL_TABLE_SRC) $(ILOC_SRC)
+	$(CC) $(CFLAGS) -o $(EXECUTABLE) $(YACC_OUTPUT) $(LEX_OUTPUT) $(SYMBOL_TABLE_SRC) $(ILOC_SRC)
 
 # Generate the parser from the yacc file
 $(YACC_OUTPUT): $(YACC_FILE)
@@ -31,6 +32,10 @@ $(YACC_OUTPUT): $(YACC_FILE)
 # Generate the lexer from the lex file
 $(LEX_OUTPUT): $(LEX_FILE)
 	$(FLEX) $(LEX_FILE)
+
+# Run the compiler with an input file
+run: $(EXECUTABLE)
+	./$(EXECUTABLE) input.c
 
 # Clean up generated files
 clean:

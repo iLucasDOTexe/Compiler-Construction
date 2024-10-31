@@ -1,6 +1,7 @@
 %{
 #include "parser.tab.h"
 #include "symbol_table.h"
+#include "iloc.h"
 
 extern FILE *yyin;
 %}
