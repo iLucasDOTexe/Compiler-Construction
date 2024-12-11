@@ -35,21 +35,21 @@ char* createRegisterName(int regNum) {
     return regName;
 }
 
-void printInstructions(instruction *head) {
+void printInstructions(instruction *head, FILE *out) {
     instruction *current = head;
     while (current != NULL) {
         if (current->label) {
-            printf("%s:\n", current->label);
+            fprintf(out, "%s:\n", current->label);
         }
         if (current->opcode) {
             if (current->src1 && current->src2 && current->dest) {
-                printf("%s %s, %s, %s\n", current->opcode, current->src1, current->src2, current->dest);
+                fprintf(out, "%s %s, %s, %s\n", current->opcode, current->src1, current->src2, current->dest);
             } else if (current->src1 && current->dest) {
-                printf("%s %s, %s\n", current->opcode, current->src1, current->dest);
+                fprintf(out, "%s %s, %s\n", current->opcode, current->src1, current->dest);
             } else if (current->dest) {
-                printf("%s %s\n", current->opcode, current->dest);
+                fprintf(out, "%s %s\n", current->opcode, current->dest);
             } else {
-                printf("%s\n", current->opcode);
+                fprintf(out, "%s\n", current->opcode);
             }
         }
         current = current->next;

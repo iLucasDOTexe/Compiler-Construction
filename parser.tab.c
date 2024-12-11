@@ -2103,7 +2103,15 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    printInstructions(codeHead);
+    FILE *outFile = fopen("test.ir", "w");
+    if (!outFile) {
+        fprintf(stderr, "Error: Could not open test.ir for writing.\n");
+        return 1;
+    }
+
+    printInstructions(codeHead, outFile);
+    fclose(outFile);
+    
     freeInstructions(codeHead);
 
     return 0;

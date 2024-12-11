@@ -16,7 +16,7 @@ typedef struct instruction {
 
 void appendInstruction(instruction **head, instruction *newInstr);
 instruction* createInstruction(const char *opcode, const char *src1, const char *src2, const char *dest);
-void printInstructions(instruction *head);
+void printInstructions(instruction *head, FILE *out);
 void freeInstructions(instruction *head);
 int getNewRegister();
 char* createRegisterName(int regNum);
