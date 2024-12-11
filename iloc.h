@@ -5,11 +5,13 @@
 #include <string.h>
 
 typedef struct instruction {
+    char *label;
     char *opcode;
     char *src1;
     char *src2;
     char *dest;
     struct instruction *next;
+    struct instruction *tail;
 } instruction;
 
 void appendInstruction(instruction **head, instruction *newInstr);
@@ -18,5 +20,8 @@ void printInstructions(instruction *head);
 void freeInstructions(instruction *head);
 int getNewRegister();
 char* createRegisterName(int regNum);
+char* createNewLabel();
+instruction* createLabelInstruction(const char *label);
+void appendLabelInstruction(instruction **head, const char *label);
 
 #endif

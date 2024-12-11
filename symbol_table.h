@@ -12,19 +12,23 @@ typedef struct {
     char *regName;
 } Symbol;
 
-typedef struct {
+typedef struct SymbolTable {
     Symbol *symbols;
     int count;
     int capacity;
+    struct SymbolTable *parent;
 } SymbolTable;
 
 void initSymbolTable(SymbolTable *table);
-int addSymbol(SymbolTable *table, const char *name, const char *type, int initialized, char *regName);
-int findSymbol(SymbolTable *table, const char *name);
+int addSymbol(SymbolTable *table, const char *name, const char *type, int initialized);
+Symbol* findSymbol(SymbolTable *table, const char *name);
 int checkUseAfterDeclaration(SymbolTable *table, const char *name);
 void checkTypeMismatch(SymbolTable *table, const char *name, const char *type);
 char* getSymbolType(SymbolTable *table, const char *name);
 void setSymbolInitialized(SymbolTable *table, const char *name);
 char* getSymbolRegister(SymbolTable *table, const char *name);
+void enterScope(SymbolTable **currentTable);
+void exitScope(SymbolTable **currentTable);
+void freeSymbolTable(SymbolTable *table);
 
 #endif

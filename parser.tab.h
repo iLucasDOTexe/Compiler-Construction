@@ -47,8 +47,9 @@ extern int yydebug;
 #line 1 "parser.y"
 
 #include "iloc.h"
+extern int globalRegCounter;
 
-#line 52 "parser.tab.h"
+#line 53 "parser.tab.h"
 
 /* Token type.  */
 #ifndef YYTOKENTYPE
@@ -69,7 +70,16 @@ extern int yydebug;
     FLOATING = 269,
     CHAR_LITERAL = 270,
     ASSIGN = 271,
-    SEMICOLON = 272
+    SEMICOLON = 272,
+    IF = 273,
+    ELSE = 274,
+    FOR = 275,
+    GT = 276,
+    LT = 277,
+    GE = 278,
+    LE = 279,
+    EQ = 280,
+    NE = 281
   };
 #endif
 
@@ -87,8 +97,15 @@ union YYSTYPE
         char *place;
         instruction *code;
     } expr_attr;
+    struct {
+        instruction *code;
+    } stmt_attr;
+    struct {
+        char *place;
+        instruction *code;
+    } cond_attr;
 
-#line 92 "parser.tab.h"
+#line 109 "parser.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

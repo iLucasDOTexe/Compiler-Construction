@@ -12,6 +12,9 @@ extern FILE *yyin;
 "char" { return CHAR; }
 "long" { return LONG; }
 "short" { return SHORT; }
+"if" { return IF; }
+"else" { return ELSE; }
+"for" { return FOR; }
 [a-zA-Z_][a-zA-Z0-9_]* { 
     yylval.sval = strdup(yytext);
     return IDENTIFIER; }
@@ -30,6 +33,12 @@ extern FILE *yyin;
 "*" { return MUL; }
 "/" { return DIV; }
 ";" { return SEMICOLON; }
+">" { return GT; }
+"<" { return LT; }
+">=" { return GE; }
+"<=" { return LE; }
+"==" { return EQ; }
+"!=" {return NE; }
 [ \t\n]+ ; // Ignore whitespaces
 "//".* ; //Ignore single line comments
 "/*"([^\*]|\*+[^*/])*\*+"/" ; //Ignore multi line comments

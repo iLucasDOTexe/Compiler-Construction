@@ -1,5 +1,6 @@
 %code requires {
 #include "iloc.h"
+extern int globalRegCounter;
 }
 
 %{
@@ -10,7 +11,7 @@
 #include "iloc.h"
 #define YYDEBUG 1
 
-SymbolTable symTable;
+SymbolTable *symTable;
 int errorFlag = 0;
 instruction *codeHead = NULL;
 int regCounter = 1;
@@ -19,7 +20,6 @@ extern FILE *yyin;
 void yyerror(const char *s);
 int yylex(void);
 int getNewRegister();
-char* createRegisterName(int);
 %}
 
 /* Declare the precedence and associativity of operators */
@@ -35,6 +35,13 @@ char* createRegisterName(int);
         char *place;
         instruction *code;
     } expr_attr;
+    struct {
+        instruction *code;
+    } stmt_attr;
+    struct {
+        char *place;
+        instruction *code;
+    } cond_attr;
 }
 
 %token <sval> INT FLOAT CHAR LONG SHORT IDENTIFIER
@@ -42,61 +49,184 @@ char* createRegisterName(int);
 %token <fval> FLOATING
 %token <sval> CHAR_LITERAL
 %token ASSIGN ADD SUB MUL DIV SEMICOLON
+%token IF ELSE FOR
+%token GT LT GE LE EQ NE
 
 %type <expr_attr> expression
 %type <sval> type
+%type <stmt_attr> program statement statements if_statement for_statement assignment declaration
+%type <cond_attr> condition
 
 %define parse.error verbose
 
 %%
 
 program:
-    program statement
-    | //empty
+    program statement {
+        if ($1.code == NULL) {
+            $$.code = $2.code;
+        } else {
+            appendInstruction(&($1.code), $2.code);
+            $$.code = $1.code;
+        }
+        codeHead = $$.code;
+    }
+    | { $$.code = NULL; }
     ;
 
 statement:
-    declaration SEMICOLON
-    | assignment SEMICOLON
-    | expression SEMICOLON
+    declaration SEMICOLON { $<stmt_attr>$.code = $1.code; }
+    | assignment SEMICOLON { $<stmt_attr>$.code = $1.code; }
+    | expression SEMICOLON { $<stmt_attr>$.code = $1.code; }
+    | if_statement { $<stmt_attr>$.code = $1.code; }
+    | for_statement { $<stmt_attr>$.code = $1.code; }
+    ;
+
+statements:
+    statement { $$.code = $1.code; }
+    | statements statement {
+        if ($1.code == NULL) {
+            $$.code = $2.code;
+        } else {
+            appendInstruction(&($1.code), $2.code);
+            $$.code = $1.code;
+        }
+    }
+    ;
+
+if_statement:
+    IF '(' condition ')' '{' { enterScope(&symTable); } statements '}' { exitScope(&symTable); } ELSE '{' { enterScope(&symTable); } statements '}' { exitScope(&symTable); } {
+        char *L_true = createNewLabel();
+        char *L_false = createNewLabel();
+        char *L_end = createNewLabel();
+        instruction *code = NULL;
+
+        appendInstruction(&code, $3.code);
+
+        instruction *cbr = createInstruction("cbr", $3.place, L_true, L_false);
+        appendInstruction(&code, cbr);
+        
+        instruction *label_true = createLabelInstruction(L_true);
+        appendInstruction(&code, label_true);
+        appendInstruction(&code, $7.code);
+        instruction *jump_end = createInstruction("jumpI", NULL, NULL, L_end);
+        appendInstruction(&code, jump_end);
+        
+        instruction *label_false = createLabelInstruction(L_false);
+        appendInstruction(&code, label_false);
+        appendInstruction(&code, $13.code);
+
+        instruction *label_end = createLabelInstruction(L_end);
+        appendInstruction(&code, label_end);
+
+        $$.code = code;
+    }
+    ;
+
+for_statement:
+    FOR '(' assignment ';' condition ';' expression ')' '{' statement '}' {
+        char *L_cond = createNewLabel();
+        char *L_body = createNewLabel();
+        char *L_end = createNewLabel();
+        instruction *code = NULL;
+        appendInstruction(&code, $3.code);
+        appendLabelInstruction(&code, L_cond);
+        appendInstruction(&code, $5.code);
+        instruction *cbr = createInstruction("cbr", $5.place, L_body, L_end);
+        appendInstruction(&code, cbr);
+        appendLabelInstruction(&code, L_body);
+        appendInstruction(&code, $10.code);
+        appendInstruction(&code, $7.code);
+        instruction *jump_cond = createInstruction("jumpI", NULL, NULL, L_cond);
+        appendInstruction(&code, jump_cond);
+        appendLabelInstruction(&code, L_end);
+        $$ = (typeof($$)){.code = code};
+    }
+    ;
+
+condition:
+    expression GT expression {
+        int regNum = getNewRegister();
+        char *resultReg = createRegisterName(regNum);
+        instruction *code = NULL;
+        appendInstruction(&code, $1.code);
+        appendInstruction(&code, $3.code);
+        instruction *instr = createInstruction("cmp_GT", $1.place, $3.place, resultReg);
+        appendInstruction(&code, instr);
+        $$.place = resultReg;
+        $$.code = code;
+    }
+    | expression LT expression {}
+    | expression GE expression {}
+    | expression LE expression {}
+    | expression EQ expression {}
+    | expression NE expression {}
     ;
 
 declaration:
     type IDENTIFIER {
-        char *regName = createRegisterName(getNewRegister());
-        addSymbol(&symTable, $2, $1, 0, NULL); // Add uninitialized variable
+        //char *regName = createRegisterName(getNewRegister());
+        int res = addSymbol(symTable, $2, $1, 0);
+        if (res != 0) {
+            YYABORT;
+        }
+        $$.code = NULL;
     }
     | type IDENTIFIER ASSIGN expression {
-        addSymbol(&symTable, $2, $1, 1, $4.place); // Add and initialize
-        checkTypeMismatch(&symTable, $2, $4.type);
+        //char *regName = createRegisterName(getNewRegister());
+        int res = addSymbol(symTable, $2, $1, 1);
+        if (res != 0) {
+            YYABORT;
+        }
+        Symbol *symbol = findSymbol(symTable, $2);
+        char *regName = symbol->regName;
+        checkTypeMismatch(symTable, $2, $4.type);
         if (errorFlag != 0) {
             YYABORT;
         }
         instruction *code = $4.code;
-        appendInstruction(&codeHead, code);
+        if (code && code->tail && code->tail->dest) {
+            instruction *lastInstr = code->tail;
+            free(lastInstr->dest);
+            lastInstr->dest = strdup(regName);
+            $$.code = code;
+        } else {
+            if ($4.place && strcmp(regName, $4.place) != 0) {
+                instruction *instr = createInstruction("i2i", $4.place, NULL, regName);
+                appendInstruction(&code, instr);
+            }
+            $$.code = code;
+        }
     }
     ;
 
 assignment:
     IDENTIFIER ASSIGN expression {
-        const char *identifierType = getSymbolType(&symTable, $1);
-        if (identifierType != NULL) {
-            checkTypeMismatch(&symTable, $1, $3.type);
+        Symbol *symbol = findSymbol(symTable, $1);
+        if (symbol) {
+            checkTypeMismatch(symTable, $1, $3.type);
             if (errorFlag != 0) {
                 YYABORT;
             }
-            setSymbolInitialized(&symTable, $1);
-            checkUseAfterDeclaration(&symTable, $1);
-            char *regName = getSymbolRegister(&symTable, $1);
-            instruction *code = NULL;
-            appendInstruction(&code, $3.code);
-            if (strcmp(regName, $3.place) != 0) {
-                instruction *instr = createInstruction("i2i", $3.place, NULL, regName);
-                appendInstruction(&code, instr);
+            setSymbolInitialized(symTable, $1);
+            checkUseAfterDeclaration(symTable, $1);
+            char *regName = symbol->regName;
+            instruction *code = $3.code;
+            if (code && code->tail && code->tail->dest) {
+                instruction *lastInstr = code->tail;
+                free(lastInstr->dest);
+                lastInstr->dest = strdup(regName);
+                $$.code = code;
+            } else {
+                if ($3.place && strcmp(regName, $3.place) != 0) {
+                    instruction *instr = createInstruction("i2i", $3.place, NULL, regName);
+                    appendInstruction(&code, instr);
+                }
             }
-            appendInstruction(&codeHead, code);
+            $$.code = code;
         } else {
             fprintf(stderr, "Error: Variable %s not declared.\n", $1);
+            YYABORT;
         }
     }
     ;
@@ -111,11 +241,11 @@ type:
 
 expression:
     expression ADD expression {
-        int regNum = getNewRegister();
-        char *resultReg = createRegisterName(regNum);
         instruction *code = NULL;
         appendInstruction(&code, $1.code);
         appendInstruction(&code, $3.code);
+        int regNum = getNewRegister();
+        char *resultReg = createRegisterName(regNum);
         instruction *instr = createInstruction("add", $1.place, $3.place, resultReg);
         appendInstruction(&code, instr);
         $$ = (typeof($$)){.type = "int", .place = resultReg, .code = code};
@@ -152,21 +282,23 @@ expression:
         $$ = (typeof($$)){.type = "int", .place = resultReg, .code = code};
     }
     | IDENTIFIER {
-        if (checkUseAfterDeclaration(&symTable, $1) != 0) {
+        Symbol *symbol = findSymbol(symTable, $1);
+        if (symbol == NULL) {
+            fprintf(stderr, "Error: Variable %s not declared.\n", $1);
             YYABORT;
         }
-        char *regName = getSymbolRegister(&symTable, $1);
-        $$ = (typeof($$)){.type = getSymbolType(&symTable, $1), .place = strdup(regName), .code = NULL};
+        if (checkUseAfterDeclaration(symTable, $1) != 0) {
+            YYABORT;
+        }
+        $$ = (typeof($$)){.type = symbol->type, .place = strdup(symbol->regName), .code = NULL};
     }
     | INTEGER { 
+        int regNum = getNewRegister();
+        char *regName = createRegisterName(regNum);
         char valueStr[20];
         sprintf(valueStr, "%i", $1);
-        int regNum = getNewRegister();
-        char *resultReg = createRegisterName(regNum);
-        instruction *instr = createInstruction("loadI", valueStr, NULL, resultReg);
-        instruction *code = NULL;
-        appendInstruction(&code, instr);
-        $$ = (typeof($$)){.type  = "int", .place = resultReg, .code = instr};
+        instruction *instr = createInstruction("loadI", valueStr, NULL, regName);
+        $$ = (typeof($$)){.type  = "int", .place = regName, .code = instr};
     }
     | FLOATING {
         int regNum = getNewRegister();
@@ -193,18 +325,15 @@ void yyerror(const char *s) {
 }
 
 int getNewRegister() {
+    if (regCounter < globalRegCounter) {
+        regCounter = globalRegCounter;
+    }
     return regCounter++;
-}
-
-char* createRegisterName(int regNum) {
-    char *regName = malloc(10);
-    sprintf(regName, "r%d", regNum);
-    return regName;
 }
 
 int main(int argc, char **argv) {
     extern int yydebug;
-    yydebug = 0;
+    yydebug = 1;
     
     if (argc > 1) {
         FILE *file = fopen(argv[1], "r");
@@ -214,8 +343,9 @@ int main(int argc, char **argv) {
         }
         yyin = file;
     }
-    
-    initSymbolTable(&symTable);
+    symTable = malloc(sizeof(SymbolTable));
+    initSymbolTable(symTable);
+    codeHead = NULL;
     
     if (yyparse() != 0 || errorFlag != 0) {
         return 1;

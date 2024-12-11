@@ -66,7 +66,7 @@
 
 
 /* First part of user prologue.  */
-#line 5 "parser.y"
+#line 6 "parser.y"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,7 +75,7 @@
 #include "iloc.h"
 #define YYDEBUG 1
 
-SymbolTable symTable;
+SymbolTable *symTable;
 int errorFlag = 0;
 instruction *codeHead = NULL;
 int regCounter = 1;
@@ -84,9 +84,8 @@ extern FILE *yyin;
 void yyerror(const char *s);
 int yylex(void);
 int getNewRegister();
-char* createRegisterName(int);
 
-#line 90 "parser.tab.c"
+#line 89 "parser.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -132,6 +131,7 @@ extern int yydebug;
 #line 1 "parser.y"
 
 #include "iloc.h"
+extern int globalRegCounter;
 
 #line 137 "parser.tab.c"
 
@@ -154,7 +154,16 @@ extern int yydebug;
     FLOATING = 269,
     CHAR_LITERAL = 270,
     ASSIGN = 271,
-    SEMICOLON = 272
+    SEMICOLON = 272,
+    IF = 273,
+    ELSE = 274,
+    FOR = 275,
+    GT = 276,
+    LT = 277,
+    GE = 278,
+    LE = 279,
+    EQ = 280,
+    NE = 281
   };
 #endif
 
@@ -172,8 +181,15 @@ union YYSTYPE
         char *place;
         instruction *code;
     } expr_attr;
+    struct {
+        instruction *code;
+    } stmt_attr;
+    struct {
+        char *place;
+        instruction *code;
+    } cond_attr;
 
-#line 177 "parser.tab.c"
+#line 193 "parser.tab.c"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -492,19 +508,19 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  2
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   37
+#define YYLAST   140
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  18
+#define YYNTOKENS  32
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  7
+#define YYNNTS  15
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  22
+#define YYNRULES  38
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  34
+#define YYNSTATES  78
 
 #define YYUNDEFTOK  2
-#define YYMAXUTOK   272
+#define YYMAXUTOK   281
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
@@ -520,15 +536,15 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
+      27,    28,     2,     2,     2,     2,     2,     2,     2,     2,
+       2,     2,     2,     2,     2,     2,     2,     2,     2,    31,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
+       2,     2,     2,    29,     2,    30,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -543,16 +559,18 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
        5,     6,     7,     8,     9,    10,    11,    12,    13,    14,
-      15,    16,    17
+      15,    16,    17,    18,    19,    20,    21,    22,    23,    24,
+      25,    26
 };
 
 #if YYDEBUG
   /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
-static const yytype_uint8 yyrline[] =
+static const yytype_int16 yyrline[] =
 {
-       0,    54,    54,    55,    59,    60,    61,    65,    69,    81,
-     105,   106,   107,   108,   109,   113,   123,   133,   144,   154,
-     161,   171,   179
+       0,    65,    65,    74,    78,    79,    80,    81,    82,    86,
+      87,    98,    98,    98,    98,    98,   127,   148,   159,   160,
+     161,   162,   163,   167,   175,   204,   235,   236,   237,   238,
+     239,   243,   253,   263,   274,   284,   295,   303,   311
 };
 #endif
 
@@ -563,8 +581,11 @@ static const char *const yytname[] =
 {
   "$end", "error", "$undefined", "ADD", "SUB", "MUL", "DIV", "INT",
   "FLOAT", "CHAR", "LONG", "SHORT", "IDENTIFIER", "INTEGER", "FLOATING",
-  "CHAR_LITERAL", "ASSIGN", "SEMICOLON", "$accept", "program", "statement",
-  "declaration", "assignment", "type", "expression", YY_NULLPTR
+  "CHAR_LITERAL", "ASSIGN", "SEMICOLON", "IF", "ELSE", "FOR", "GT", "LT",
+  "GE", "LE", "EQ", "NE", "'('", "')'", "'{'", "'}'", "';'", "$accept",
+  "program", "statement", "statements", "if_statement", "$@1", "$@2",
+  "$@3", "$@4", "for_statement", "condition", "declaration", "assignment",
+  "type", "expression", YY_NULLPTR
 };
 #endif
 
@@ -574,11 +595,13 @@ static const char *const yytname[] =
 static const yytype_int16 yytoknum[] =
 {
        0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
-     265,   266,   267,   268,   269,   270,   271,   272
+     265,   266,   267,   268,   269,   270,   271,   272,   273,   274,
+     275,   276,   277,   278,   279,   280,   281,    40,    41,   123,
+     125,    59
 };
 # endif
 
-#define YYPACT_NINF (-16)
+#define YYPACT_NINF (-21)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
@@ -592,10 +615,14 @@ static const yytype_int16 yytoknum[] =
      STATE-NUM.  */
 static const yytype_int8 yypact[] =
 {
-     -16,     0,   -16,   -16,   -16,   -16,   -16,   -16,   -15,   -16,
-     -16,   -16,   -16,   -11,     4,     5,    -1,    18,   -16,   -16,
-      10,    18,    18,    18,    18,   -16,   -16,    31,    18,    14,
-      14,   -16,   -16,    31
+     -21,   106,   -21,   -21,   -21,   -21,   -21,   -21,    19,   -21,
+     -21,   -21,    -4,    11,   -21,   -21,   -21,    20,    22,    39,
+       0,     7,     7,    40,   -21,   -21,    24,     7,     7,     7,
+       7,   -21,   -21,    28,    26,    86,    19,    25,     7,    10,
+      10,   -21,   -21,    29,     7,     7,     7,     7,     7,     7,
+       7,    28,   -21,    28,    28,    28,    28,    28,    28,    30,
+     120,     7,   -21,    35,     8,   -21,   -21,    31,    38,   120,
+      34,    36,   -21,   -21,   120,    68,   -21,   -21
 };
 
   /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -603,22 +630,28 @@ static const yytype_int8 yypact[] =
      means the default is an error.  */
 static const yytype_int8 yydefact[] =
 {
-       3,     0,     1,    10,    11,    12,    13,    14,    19,    20,
-      21,    22,     2,     0,     0,     0,     0,     0,     4,     5,
-       7,     0,     0,     0,     0,     6,    19,     9,     0,    15,
-      16,    17,    18,     8
+       3,     0,     1,    26,    27,    28,    29,    30,    35,    36,
+      37,    38,     0,     0,     2,     7,     8,     0,     0,     0,
+       0,     0,     0,     0,     4,     5,    23,     0,     0,     0,
+       0,     6,    35,    25,     0,     0,     0,     0,     0,    31,
+      32,    33,    34,     0,     0,     0,     0,     0,     0,     0,
+       0,    24,    11,    17,    18,    19,    20,    21,    22,     0,
+       0,     0,     9,     0,     0,    12,    10,     0,     0,     0,
+       0,     0,    13,    16,     0,     0,    14,    15
 };
 
   /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -16,   -16,   -16,   -16,   -16,   -16,     1
+     -21,   -21,    -1,   -15,   -21,   -21,   -21,   -21,   -21,   -21,
+      14,   -21,    44,   -21,   -20
 };
 
   /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-      -1,     1,    12,    13,    14,    15,    16
+      -1,     1,    62,    63,    15,    60,    68,    74,    77,    16,
+      34,    17,    18,    19,    20
 };
 
   /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -626,44 +659,72 @@ static const yytype_int8 yydefgoto[] =
      number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-       2,    17,    21,    22,    23,    24,    18,     3,     4,     5,
-       6,     7,     8,     9,    10,    11,    25,    20,    27,    23,
-      24,    19,    29,    30,    31,    32,    28,     0,     0,    33,
-      26,     9,    10,    11,    21,    22,    23,    24
+      14,    33,    35,    27,    28,    29,    30,    39,    40,    41,
+      42,    27,    28,    29,    30,    29,    30,    31,    51,    32,
+       9,    10,    11,    22,    53,    54,    55,    56,    57,    58,
+      35,    27,    28,    29,    30,    21,    67,    24,    23,    25,
+      38,    64,     3,     4,     5,     6,     7,     8,     9,    10,
+      11,    26,    36,    12,    43,    13,    50,    70,    52,    75,
+      69,    61,    66,    72,    59,    65,    73,    37,    71,     0,
+       0,     0,     0,     0,    66,     3,     4,     5,     6,     7,
+       8,     9,    10,    11,     0,     0,    12,     0,    13,    27,
+      28,    29,    30,     0,     0,     0,     0,     0,    76,     0,
+       0,     0,     0,     0,     0,     0,     2,    44,    45,    46,
+      47,    48,    49,     3,     4,     5,     6,     7,     8,     9,
+      10,    11,     0,     0,    12,     0,    13,     3,     4,     5,
+       6,     7,     8,     9,    10,    11,     0,     0,    12,     0,
+      13
 };
 
 static const yytype_int8 yycheck[] =
 {
-       0,    16,     3,     4,     5,     6,    17,     7,     8,     9,
-      10,    11,    12,    13,    14,    15,    17,    12,    17,     5,
-       6,    17,    21,    22,    23,    24,    16,    -1,    -1,    28,
-      12,    13,    14,    15,     3,     4,     5,     6
+       1,    21,    22,     3,     4,     5,     6,    27,    28,    29,
+      30,     3,     4,     5,     6,     5,     6,    17,    38,    12,
+      13,    14,    15,    27,    44,    45,    46,    47,    48,    49,
+      50,     3,     4,     5,     6,    16,    28,    17,    27,    17,
+      16,    61,     7,     8,     9,    10,    11,    12,    13,    14,
+      15,    12,    12,    18,    28,    20,    31,    19,    29,    74,
+      29,    31,    63,    29,    50,    30,    30,    23,    69,    -1,
+      -1,    -1,    -1,    -1,    75,     7,     8,     9,    10,    11,
+      12,    13,    14,    15,    -1,    -1,    18,    -1,    20,     3,
+       4,     5,     6,    -1,    -1,    -1,    -1,    -1,    30,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,     0,    21,    22,    23,
+      24,    25,    26,     7,     8,     9,    10,    11,    12,    13,
+      14,    15,    -1,    -1,    18,    -1,    20,     7,     8,     9,
+      10,    11,    12,    13,    14,    15,    -1,    -1,    18,    -1,
+      20
 };
 
   /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
      symbol of state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,    19,     0,     7,     8,     9,    10,    11,    12,    13,
-      14,    15,    20,    21,    22,    23,    24,    16,    17,    17,
-      12,     3,     4,     5,     6,    17,    12,    24,    16,    24,
-      24,    24,    24,    24
+       0,    33,     0,     7,     8,     9,    10,    11,    12,    13,
+      14,    15,    18,    20,    34,    36,    41,    43,    44,    45,
+      46,    16,    27,    27,    17,    17,    12,     3,     4,     5,
+       6,    17,    12,    46,    42,    46,    12,    44,    16,    46,
+      46,    46,    46,    28,    21,    22,    23,    24,    25,    26,
+      31,    46,    29,    46,    46,    46,    46,    46,    46,    42,
+      37,    31,    34,    35,    46,    30,    34,    28,    38,    29,
+      19,    34,    29,    30,    39,    35,    30,    40
 };
 
   /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_int8 yyr1[] =
 {
-       0,    18,    19,    19,    20,    20,    20,    21,    21,    22,
-      23,    23,    23,    23,    23,    24,    24,    24,    24,    24,
-      24,    24,    24
+       0,    32,    33,    33,    34,    34,    34,    34,    34,    35,
+      35,    37,    38,    39,    40,    36,    41,    42,    42,    42,
+      42,    42,    42,    43,    43,    44,    45,    45,    45,    45,
+      45,    46,    46,    46,    46,    46,    46,    46,    46
 };
 
   /* YYR2[YYN] -- Number of symbols on the right hand side of rule YYN.  */
 static const yytype_int8 yyr2[] =
 {
-       0,     2,     2,     0,     2,     2,     2,     2,     4,     3,
-       1,     1,     1,     1,     1,     3,     3,     3,     3,     1,
-       1,     1,     1
+       0,     2,     2,     0,     2,     2,     2,     1,     1,     1,
+       2,     0,     0,     0,     0,    15,    11,     3,     3,     3,
+       3,     3,     3,     2,     4,     3,     1,     1,     1,     1,
+       1,     3,     3,     3,     3,     1,     1,     1,     1
 };
 
 
@@ -1358,102 +1419,323 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
-  case 7:
+  case 2:
 #line 65 "parser.y"
-                    {
-        char *regName = createRegisterName(getNewRegister());
-        addSymbol(&symTable, (yyvsp[0].sval), (yyvsp[-1].sval), 0, NULL); // Add uninitialized variable
+                      {
+        if ((yyvsp[-1].stmt_attr).code == NULL) {
+            (yyval.stmt_attr).code = (yyvsp[0].stmt_attr).code;
+        } else {
+            appendInstruction(&((yyvsp[-1].stmt_attr).code), (yyvsp[0].stmt_attr).code);
+            (yyval.stmt_attr).code = (yyvsp[-1].stmt_attr).code;
+        }
+        codeHead = (yyval.stmt_attr).code;
     }
-#line 1368 "parser.tab.c"
+#line 1434 "parser.tab.c"
+    break;
+
+  case 3:
+#line 74 "parser.y"
+      { (yyval.stmt_attr).code = NULL; }
+#line 1440 "parser.tab.c"
+    break;
+
+  case 4:
+#line 78 "parser.y"
+                          { (yyval.stmt_attr).code = (yyvsp[-1].stmt_attr).code; }
+#line 1446 "parser.tab.c"
+    break;
+
+  case 5:
+#line 79 "parser.y"
+                           { (yyval.stmt_attr).code = (yyvsp[-1].stmt_attr).code; }
+#line 1452 "parser.tab.c"
+    break;
+
+  case 6:
+#line 80 "parser.y"
+                           { (yyval.stmt_attr).code = (yyvsp[-1].expr_attr).code; }
+#line 1458 "parser.tab.c"
+    break;
+
+  case 7:
+#line 81 "parser.y"
+                   { (yyval.stmt_attr).code = (yyvsp[0].stmt_attr).code; }
+#line 1464 "parser.tab.c"
     break;
 
   case 8:
-#line 69 "parser.y"
-                                        {
-        addSymbol(&symTable, (yyvsp[-2].sval), (yyvsp[-3].sval), 1, (yyvsp[0].expr_attr).place); // Add and initialize
-        checkTypeMismatch(&symTable, (yyvsp[-2].sval), (yyvsp[0].expr_attr).type);
-        if (errorFlag != 0) {
-            YYABORT;
-        }
-        instruction *code = (yyvsp[0].expr_attr).code;
-        appendInstruction(&codeHead, code);
-    }
-#line 1382 "parser.tab.c"
+#line 82 "parser.y"
+                    { (yyval.stmt_attr).code = (yyvsp[0].stmt_attr).code; }
+#line 1470 "parser.tab.c"
     break;
 
   case 9:
-#line 81 "parser.y"
-                                 {
-        const char *identifierType = getSymbolType(&symTable, (yyvsp[-2].sval));
-        if (identifierType != NULL) {
-            checkTypeMismatch(&symTable, (yyvsp[-2].sval), (yyvsp[0].expr_attr).type);
-            if (errorFlag != 0) {
-                YYABORT;
-            }
-            setSymbolInitialized(&symTable, (yyvsp[-2].sval));
-            checkUseAfterDeclaration(&symTable, (yyvsp[-2].sval));
-            char *regName = getSymbolRegister(&symTable, (yyvsp[-2].sval));
-            instruction *code = NULL;
-            appendInstruction(&code, (yyvsp[0].expr_attr).code);
-            if (strcmp(regName, (yyvsp[0].expr_attr).place) != 0) {
-                instruction *instr = createInstruction("i2i", (yyvsp[0].expr_attr).place, NULL, regName);
-                appendInstruction(&code, instr);
-            }
-            appendInstruction(&codeHead, code);
-        } else {
-            fprintf(stderr, "Error: Variable %s not declared.\n", (yyvsp[-2].sval));
-        }
-    }
-#line 1408 "parser.tab.c"
+#line 86 "parser.y"
+              { (yyval.stmt_attr).code = (yyvsp[0].stmt_attr).code; }
+#line 1476 "parser.tab.c"
     break;
 
   case 10:
-#line 105 "parser.y"
-        { (yyval.sval) = "int"; }
-#line 1414 "parser.tab.c"
+#line 87 "parser.y"
+                           {
+        if ((yyvsp[-1].stmt_attr).code == NULL) {
+            (yyval.stmt_attr).code = (yyvsp[0].stmt_attr).code;
+        } else {
+            appendInstruction(&((yyvsp[-1].stmt_attr).code), (yyvsp[0].stmt_attr).code);
+            (yyval.stmt_attr).code = (yyvsp[-1].stmt_attr).code;
+        }
+    }
+#line 1489 "parser.tab.c"
     break;
 
   case 11:
-#line 106 "parser.y"
-            { (yyval.sval) = "float"; }
-#line 1420 "parser.tab.c"
+#line 98 "parser.y"
+                             { enterScope(&symTable); }
+#line 1495 "parser.tab.c"
     break;
 
   case 12:
-#line 107 "parser.y"
-           { (yyval.sval) = "char"; }
-#line 1426 "parser.tab.c"
+#line 98 "parser.y"
+                                                                       { exitScope(&symTable); }
+#line 1501 "parser.tab.c"
     break;
 
   case 13:
-#line 108 "parser.y"
-           { (yyval.sval) = "long"; }
-#line 1432 "parser.tab.c"
+#line 98 "parser.y"
+                                                                                                          { enterScope(&symTable); }
+#line 1507 "parser.tab.c"
     break;
 
   case 14:
-#line 109 "parser.y"
-            { (yyval.sval) = "short"; }
-#line 1438 "parser.tab.c"
+#line 98 "parser.y"
+                                                                                                                                                    { exitScope(&symTable); }
+#line 1513 "parser.tab.c"
     break;
 
   case 15:
-#line 113 "parser.y"
-                              {
+#line 98 "parser.y"
+                                                                                                                                                                              {
+        char *L_true = createNewLabel();
+        char *L_false = createNewLabel();
+        char *L_end = createNewLabel();
+        instruction *code = NULL;
+
+        appendInstruction(&code, (yyvsp[-12].cond_attr).code);
+
+        instruction *cbr = createInstruction("cbr", (yyvsp[-12].cond_attr).place, L_true, L_false);
+        appendInstruction(&code, cbr);
+        
+        instruction *label_true = createLabelInstruction(L_true);
+        appendInstruction(&code, label_true);
+        appendInstruction(&code, (yyvsp[-8].stmt_attr).code);
+        instruction *jump_end = createInstruction("jumpI", NULL, NULL, L_end);
+        appendInstruction(&code, jump_end);
+        
+        instruction *label_false = createLabelInstruction(L_false);
+        appendInstruction(&code, label_false);
+        appendInstruction(&code, (yyvsp[-2].stmt_attr).code);
+
+        instruction *label_end = createLabelInstruction(L_end);
+        appendInstruction(&code, label_end);
+
+        (yyval.stmt_attr).code = code;
+    }
+#line 1544 "parser.tab.c"
+    break;
+
+  case 16:
+#line 127 "parser.y"
+                                                                          {
+        char *L_cond = createNewLabel();
+        char *L_body = createNewLabel();
+        char *L_end = createNewLabel();
+        instruction *code = NULL;
+        appendInstruction(&code, (yyvsp[-8].stmt_attr).code);
+        appendLabelInstruction(&code, L_cond);
+        appendInstruction(&code, (yyvsp[-6].cond_attr).code);
+        instruction *cbr = createInstruction("cbr", (yyvsp[-6].cond_attr).place, L_body, L_end);
+        appendInstruction(&code, cbr);
+        appendLabelInstruction(&code, L_body);
+        appendInstruction(&code, (yyvsp[-1].stmt_attr).code);
+        appendInstruction(&code, (yyvsp[-4].expr_attr).code);
+        instruction *jump_cond = createInstruction("jumpI", NULL, NULL, L_cond);
+        appendInstruction(&code, jump_cond);
+        appendLabelInstruction(&code, L_end);
+        (yyval.stmt_attr) = (typeof((yyval.stmt_attr))){.code = code};
+    }
+#line 1567 "parser.tab.c"
+    break;
+
+  case 17:
+#line 148 "parser.y"
+                             {
         int regNum = getNewRegister();
         char *resultReg = createRegisterName(regNum);
         instruction *code = NULL;
         appendInstruction(&code, (yyvsp[-2].expr_attr).code);
         appendInstruction(&code, (yyvsp[0].expr_attr).code);
+        instruction *instr = createInstruction("cmp_GT", (yyvsp[-2].expr_attr).place, (yyvsp[0].expr_attr).place, resultReg);
+        appendInstruction(&code, instr);
+        (yyval.cond_attr).place = resultReg;
+        (yyval.cond_attr).code = code;
+    }
+#line 1583 "parser.tab.c"
+    break;
+
+  case 18:
+#line 159 "parser.y"
+                               {}
+#line 1589 "parser.tab.c"
+    break;
+
+  case 19:
+#line 160 "parser.y"
+                               {}
+#line 1595 "parser.tab.c"
+    break;
+
+  case 20:
+#line 161 "parser.y"
+                               {}
+#line 1601 "parser.tab.c"
+    break;
+
+  case 21:
+#line 162 "parser.y"
+                               {}
+#line 1607 "parser.tab.c"
+    break;
+
+  case 22:
+#line 163 "parser.y"
+                               {}
+#line 1613 "parser.tab.c"
+    break;
+
+  case 23:
+#line 167 "parser.y"
+                    {
+        //char *regName = createRegisterName(getNewRegister());
+        int res = addSymbol(symTable, (yyvsp[0].sval), (yyvsp[-1].sval), 0);
+        if (res != 0) {
+            YYABORT;
+        }
+        (yyval.stmt_attr).code = NULL;
+    }
+#line 1626 "parser.tab.c"
+    break;
+
+  case 24:
+#line 175 "parser.y"
+                                        {
+        //char *regName = createRegisterName(getNewRegister());
+        int res = addSymbol(symTable, (yyvsp[-2].sval), (yyvsp[-3].sval), 1);
+        if (res != 0) {
+            YYABORT;
+        }
+        Symbol *symbol = findSymbol(symTable, (yyvsp[-2].sval));
+        char *regName = symbol->regName;
+        checkTypeMismatch(symTable, (yyvsp[-2].sval), (yyvsp[0].expr_attr).type);
+        if (errorFlag != 0) {
+            YYABORT;
+        }
+        instruction *code = (yyvsp[0].expr_attr).code;
+        if (code && code->tail && code->tail->dest) {
+            instruction *lastInstr = code->tail;
+            free(lastInstr->dest);
+            lastInstr->dest = strdup(regName);
+            (yyval.stmt_attr).code = code;
+        } else {
+            if ((yyvsp[0].expr_attr).place && strcmp(regName, (yyvsp[0].expr_attr).place) != 0) {
+                instruction *instr = createInstruction("i2i", (yyvsp[0].expr_attr).place, NULL, regName);
+                appendInstruction(&code, instr);
+            }
+            (yyval.stmt_attr).code = code;
+        }
+    }
+#line 1657 "parser.tab.c"
+    break;
+
+  case 25:
+#line 204 "parser.y"
+                                 {
+        Symbol *symbol = findSymbol(symTable, (yyvsp[-2].sval));
+        if (symbol) {
+            checkTypeMismatch(symTable, (yyvsp[-2].sval), (yyvsp[0].expr_attr).type);
+            if (errorFlag != 0) {
+                YYABORT;
+            }
+            setSymbolInitialized(symTable, (yyvsp[-2].sval));
+            checkUseAfterDeclaration(symTable, (yyvsp[-2].sval));
+            char *regName = symbol->regName;
+            instruction *code = (yyvsp[0].expr_attr).code;
+            if (code && code->tail && code->tail->dest) {
+                instruction *lastInstr = code->tail;
+                free(lastInstr->dest);
+                lastInstr->dest = strdup(regName);
+                (yyval.stmt_attr).code = code;
+            } else {
+                if ((yyvsp[0].expr_attr).place && strcmp(regName, (yyvsp[0].expr_attr).place) != 0) {
+                    instruction *instr = createInstruction("i2i", (yyvsp[0].expr_attr).place, NULL, regName);
+                    appendInstruction(&code, instr);
+                }
+            }
+            (yyval.stmt_attr).code = code;
+        } else {
+            fprintf(stderr, "Error: Variable %s not declared.\n", (yyvsp[-2].sval));
+            YYABORT;
+        }
+    }
+#line 1690 "parser.tab.c"
+    break;
+
+  case 26:
+#line 235 "parser.y"
+        { (yyval.sval) = "int"; }
+#line 1696 "parser.tab.c"
+    break;
+
+  case 27:
+#line 236 "parser.y"
+            { (yyval.sval) = "float"; }
+#line 1702 "parser.tab.c"
+    break;
+
+  case 28:
+#line 237 "parser.y"
+           { (yyval.sval) = "char"; }
+#line 1708 "parser.tab.c"
+    break;
+
+  case 29:
+#line 238 "parser.y"
+           { (yyval.sval) = "long"; }
+#line 1714 "parser.tab.c"
+    break;
+
+  case 30:
+#line 239 "parser.y"
+            { (yyval.sval) = "short"; }
+#line 1720 "parser.tab.c"
+    break;
+
+  case 31:
+#line 243 "parser.y"
+                              {
+        instruction *code = NULL;
+        appendInstruction(&code, (yyvsp[-2].expr_attr).code);
+        appendInstruction(&code, (yyvsp[0].expr_attr).code);
+        int regNum = getNewRegister();
+        char *resultReg = createRegisterName(regNum);
         instruction *instr = createInstruction("add", (yyvsp[-2].expr_attr).place, (yyvsp[0].expr_attr).place, resultReg);
         appendInstruction(&code, instr);
         (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type = "int", .place = resultReg, .code = code};
     }
-#line 1453 "parser.tab.c"
+#line 1735 "parser.tab.c"
     break;
 
-  case 16:
-#line 123 "parser.y"
+  case 32:
+#line 253 "parser.y"
                                 {
         int regNum = getNewRegister();
         char *resultReg = createRegisterName(regNum);
@@ -1464,11 +1746,11 @@ yyreduce:
         appendInstruction(&code, instr);
         (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type = "int", .place = resultReg, .code = code};
     }
-#line 1468 "parser.tab.c"
+#line 1750 "parser.tab.c"
     break;
 
-  case 17:
-#line 133 "parser.y"
+  case 33:
+#line 263 "parser.y"
                                 {
         int regNum = getNewRegister();
         char *resultReg = createRegisterName(regNum);
@@ -1480,11 +1762,11 @@ yyreduce:
         (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type = "int", .place = resultReg, .code = code};
 
     }
-#line 1484 "parser.tab.c"
+#line 1766 "parser.tab.c"
     break;
 
-  case 18:
-#line 144 "parser.y"
+  case 34:
+#line 274 "parser.y"
                                 {
         int regNum = getNewRegister();
         char *resultReg = createRegisterName(regNum);
@@ -1495,38 +1777,40 @@ yyreduce:
         appendInstruction(&code, instr);
         (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type = "int", .place = resultReg, .code = code};
     }
-#line 1499 "parser.tab.c"
+#line 1781 "parser.tab.c"
     break;
 
-  case 19:
-#line 154 "parser.y"
+  case 35:
+#line 284 "parser.y"
                  {
-        if (checkUseAfterDeclaration(&symTable, (yyvsp[0].sval)) != 0) {
+        Symbol *symbol = findSymbol(symTable, (yyvsp[0].sval));
+        if (symbol == NULL) {
+            fprintf(stderr, "Error: Variable %s not declared.\n", (yyvsp[0].sval));
             YYABORT;
         }
-        char *regName = getSymbolRegister(&symTable, (yyvsp[0].sval));
-        (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type = getSymbolType(&symTable, (yyvsp[0].sval)), .place = strdup(regName), .code = NULL};
+        if (checkUseAfterDeclaration(symTable, (yyvsp[0].sval)) != 0) {
+            YYABORT;
+        }
+        (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type = symbol->type, .place = strdup(symbol->regName), .code = NULL};
     }
-#line 1511 "parser.tab.c"
+#line 1797 "parser.tab.c"
     break;
 
-  case 20:
-#line 161 "parser.y"
+  case 36:
+#line 295 "parser.y"
               { 
+        int regNum = getNewRegister();
+        char *regName = createRegisterName(regNum);
         char valueStr[20];
         sprintf(valueStr, "%i", (yyvsp[0].ival));
-        int regNum = getNewRegister();
-        char *resultReg = createRegisterName(regNum);
-        instruction *instr = createInstruction("loadI", valueStr, NULL, resultReg);
-        instruction *code = NULL;
-        appendInstruction(&code, instr);
-        (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type  = "int", .place = resultReg, .code = instr};
+        instruction *instr = createInstruction("loadI", valueStr, NULL, regName);
+        (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type  = "int", .place = regName, .code = instr};
     }
-#line 1526 "parser.tab.c"
+#line 1810 "parser.tab.c"
     break;
 
-  case 21:
-#line 171 "parser.y"
+  case 37:
+#line 303 "parser.y"
                {
         int regNum = getNewRegister();
         char *resultReg = createRegisterName(regNum);
@@ -1535,11 +1819,11 @@ yyreduce:
         instruction *instr = createInstruction("loadI", valueStr, NULL, resultReg);
         (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type  = "float", .place = resultReg, .code = instr};
     }
-#line 1539 "parser.tab.c"
+#line 1823 "parser.tab.c"
     break;
 
-  case 22:
-#line 179 "parser.y"
+  case 38:
+#line 311 "parser.y"
                    {
         int regNum = getNewRegister();
         char *resultReg = createRegisterName(regNum);
@@ -1549,11 +1833,11 @@ yyreduce:
         (yyval.expr_attr) = (typeof((yyval.expr_attr))){.type  = "char", .place = resultReg, .code = instr};
 
     }
-#line 1553 "parser.tab.c"
+#line 1837 "parser.tab.c"
     break;
 
 
-#line 1557 "parser.tab.c"
+#line 1841 "parser.tab.c"
 
       default: break;
     }
@@ -1785,7 +2069,7 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 189 "parser.y"
+#line 321 "parser.y"
 
 
 void yyerror(const char *s) {
@@ -1793,18 +2077,15 @@ void yyerror(const char *s) {
 }
 
 int getNewRegister() {
+    if (regCounter < globalRegCounter) {
+        regCounter = globalRegCounter;
+    }
     return regCounter++;
-}
-
-char* createRegisterName(int regNum) {
-    char *regName = malloc(10);
-    sprintf(regName, "r%d", regNum);
-    return regName;
 }
 
 int main(int argc, char **argv) {
     extern int yydebug;
-    yydebug = 0;
+    yydebug = 1;
     
     if (argc > 1) {
         FILE *file = fopen(argv[1], "r");
@@ -1814,8 +2095,9 @@ int main(int argc, char **argv) {
         }
         yyin = file;
     }
-    
-    initSymbolTable(&symTable);
+    symTable = malloc(sizeof(SymbolTable));
+    initSymbolTable(symTable);
+    codeHead = NULL;
     
     if (yyparse() != 0 || errorFlag != 0) {
         return 1;
